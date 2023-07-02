@@ -24,6 +24,6 @@ class Command(BaseCommand):
                                      is_superuser=True,
                                      is_staff=True)
             user = User.objects.get(username=username)
-            print(f'Superuser created with username: {user.username}')
+            print(f'Superuser created with username: {user.username} password: {password}')
         except:
             print(f'Cannot create superuser with username: {username} and email: {email}')

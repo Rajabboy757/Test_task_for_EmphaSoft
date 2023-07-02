@@ -31,7 +31,7 @@ class User(AbstractUser):
             'Your verification code',
             f'{self.verification_code}',
             settings.FROM_EMAIL,
-            [f'{self.email}'],
+            f'{self.email}',
         )
 
     def __str__(self):

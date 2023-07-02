@@ -1,12 +1,9 @@
-from rest_framework import generics, status, views, permissions, viewsets
-from rest_framework.pagination import PageNumberPagination
+from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
-from company.models import Company
 from .models import User
 from accounts import serializers
-from .permissions import IsOwner
 
 
 class RegisterView(generics.GenericAPIView):
@@ -117,64 +114,3 @@ class UserUpdateAPIView(generics.GenericAPIView):
         user.save()
 
         return Response(data)
-
-
-class AddEmployeeAPIView(generics.GenericAPIView):
-    serializer_class = serializers.AddEmployeeSerializer
-    permission_classes = [IsAuthenticated, IsOwner]
-
-    def post(self, request):
-        if request.user.type != 'admin':
-            return Response({'message': 'for creating an employee you must be admin for some company'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        serializer = self.serializer_class(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-
-class Pagination10To100(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = 'page_size'
-    max_page_size = 100
-
-
-class GetAllCompanyEmployeesAPIView(generics.ListAPIView):
-    permission_classes = (IsAuthenticated,)
-    serializer_class = serializers.GetAllCompanyEmployeesSerializer
-    pagination_class = Pagination10To100
-    http_method_names = ('get',)
-
-    def get(self, request, *args, **kwargs):
-        company_id = kwargs.get('pk')
-        user = request.user
-        company = Company.objects.get(id=company_id)
-
-        if user == company.owner or user in company.employee.filter(type='admin'):
-            self.queryset = company.employee.all()
-            return super().get(self, request, *args, **kwargs)
-        else:
-            return Response({'message': 'for getting a list of employees you must be owner or admin for this company'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-
-class DeleteEmployeesAPIView(generics.GenericAPIView):
-    permission_classes = (IsAuthenticated,)
-    serializer_class = serializers.DeleteEmployeesSerializer
-
-    def post(self, request):
-        company_id = request.data.get('company_id')
-        company = Company.objects.get(id=company_id)
-        # print(request.data)
-        if company.owner == request.user:
-            user_ids = request.data.get('ids')  # [1,2,3] List of ID's
-            # print(user_ids)
-            users = User.objects.filter(id__in=user_ids)
-            users = users.filter(type='employee')
-            for user in users:
-                user.delete()
-
-            return Response({'message': 'Your company employees deleted successfully'}, status=status.HTTP_200_OK)
-
-        else:
-            return Response({'message': 'You are not owner of this company'}, status=status.HTTP_400_BAD_REQUEST)

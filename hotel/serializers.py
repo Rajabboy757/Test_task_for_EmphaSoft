@@ -9,6 +9,8 @@ class RoomSerializer(serializers.ModelSerializer):
 
 
 class BroneSerializer(serializers.ModelSerializer):
+    room = RoomSerializer()
+
     class Meta:
         model = Brone
         fields = ('id', 'room', 'broned_by', 'broned_from', 'broned_to')

@@ -1,16 +1,18 @@
+from django.utils.dateparse import parse_datetime
+from django_filters import rest_framework as filters, DateTimeFilter
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import viewsets, generics, status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Brone, Room
-from rest_framework import viewsets, generics, status
-from .serializers import RoomSerializer, BroneSerializer
-from django_filters.rest_framework import DjangoFilterBackend, FilterSet
-from django_filters import rest_framework as filters
 from accounts.permissions import IsOwner
-from rest_framework.permissions import IsAuthenticated
-from django.utils.dateparse import parse_datetime
+from .models import Brone, Room
+from .serializers import RoomSerializer, BroneSerializer
 
 
 class RoomFilter(filters.FilterSet):
+    brone_from = DateTimeFilter(field_name="room", method='m1')
+    brone_to = DateTimeFilter(field_name="room", method='m1')
     min_price = filters.NumberFilter(field_name="daily_price", lookup_expr='gte')
     max_price = filters.NumberFilter(field_name="daily_price", lookup_expr='lte')
 
@@ -18,29 +20,32 @@ class RoomFilter(filters.FilterSet):
         model = Room
         fields = ['places']
 
-
-class RoomList(generics.ListAPIView):
-    queryset = Room.objects.all()
-    serializer_class = RoomSerializer
-    filter_backends = [DjangoFilterBackend]
-    filterset_class = RoomFilter
+    def m1(self, queryset, field_name, value):
+        return queryset
 
 
 def is_free_for_period(room, date_from, date_to):
     brones = Brone.objects.filter(room=room)
     if brones:
         for brone in brones:
-            if brone.broned_from < date_from < brone.broned_to or brone.broned_to > date_to > brone.broned_from:
+            if brone.broned_from < date_from < brone.broned_to or \
+                    brone.broned_from < date_to < brone.broned_to or \
+                    date_from < brone.broned_to < date_to or \
+                    date_from < brone.broned_from < date_to:
                 return False
     return True
 
 
-class FreeRoomsForPeriod(generics.GenericAPIView):
+class FreeRoomsForPeriod(generics.ListAPIView):
     serializer_class = RoomSerializer
+    queryset = Room.objects.all()
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = RoomFilter
 
-    def post(self, request):
-        date_from = parse_datetime(request.data.get('broned_from'))
-        date_to = parse_datetime(request.data.get('broned_to'))
+    def list(self, request, *args, **kwargs):
+
+        date_from = parse_datetime(request.GET.get('brone_from'))
+        date_to = parse_datetime(request.GET.get('brone_to'))
 
         rooms = Room.objects.all()
         free_rooms_ids = []
@@ -49,8 +54,15 @@ class FreeRoomsForPeriod(generics.GenericAPIView):
             if is_free_for_period(room, date_from, date_to):
                 free_rooms_ids.append(room.id)
 
-        free_rooms_for_period = Room.objects.filter(id__in=free_rooms_ids).values()
-        return Response(free_rooms_for_period)
+        queryset = Room.objects.filter(id__in=free_rooms_ids).values()
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 class BroneViewSet(viewsets.ModelViewSet):

@@ -36,7 +36,7 @@ def is_free_for_period(room, date_from, date_to):
     return True
 
 
-class FreeRoomsForPeriod(generics.ListAPIView):
+class RoomFilters(generics.ListAPIView):
     serializer_class = RoomSerializer
     queryset = Room.objects.all()
     filter_backends = [DjangoFilterBackend]
@@ -44,17 +44,22 @@ class FreeRoomsForPeriod(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
 
-        date_from = parse_datetime(request.GET.get('brone_from'))
-        date_to = parse_datetime(request.GET.get('brone_to'))
+        try:
+            date_from = parse_datetime(request.GET.get('brone_from'))
+            date_to = parse_datetime(request.GET.get('brone_to'))
 
-        rooms = Room.objects.all()
-        free_rooms_ids = []
+            rooms = Room.objects.all()
+            free_rooms_ids = []
 
-        for room in rooms:
-            if is_free_for_period(room, date_from, date_to):
-                free_rooms_ids.append(room.id)
+            for room in rooms:
+                if is_free_for_period(room, date_from, date_to):
+                    free_rooms_ids.append(room.id)
 
-        queryset = Room.objects.filter(id__in=free_rooms_ids).values()
+            queryset = Room.objects.filter(id__in=free_rooms_ids).values()
+            queryset = self.filter_queryset(queryset)
+
+        except:
+            queryset = self.filter_queryset(self.get_queryset())
 
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -69,7 +74,7 @@ class BroneViewSet(viewsets.ModelViewSet):
     queryset = Brone.objects.all()
     permission_classes = [IsOwner, IsAuthenticated]
     serializer_class = BroneSerializer
-    http_method_names = ('get', 'post', 'patch', 'delete')
+    http_method_names = ('get', 'post', 'delete')
 
     def create(self, request, *args, **kwargs):
 
@@ -86,6 +91,9 @@ class BroneViewSet(viewsets.ModelViewSet):
         return Response({'message': "this room is already broned for this period"}, status=status.HTTP_400_BAD_REQUEST)
 
     def list(self, request, *args, **kwargs):
+
+        '''My brones'''
+
         queryset = Brone.objects.filter(broned_by=request.user)
 
         page = self.paginate_queryset(queryset)
